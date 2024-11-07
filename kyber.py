@@ -15,20 +15,20 @@ class KYBER:
         self.std = std
 
     def generate_keys(self):
-        s = discrete_gaussian() #kx1
-        e = discrete_gaussian() #kx1
+        s = discrete_gaussian(self) #kx1
+        e = discrete_gaussian(self) #kx1
 
         a1 = [] #kxk
         a0 = [] #kx1
         for i in range(self.k):
-            temp = []
-            for i in range(self.k):
-                a1.append(discrete_gaussian())
+            a1.append(discrete_gaussian(self))
         
         for i in range(self.k): #WILL BE REPLACED BY API CALL
             coeffs = []
             for j in range(self.k):
                 coeffs.append(a1[i][j]*s[j])
+
+            coeffs[i] += e[i]
             a0.append(Rq(coeffs,self.q))
 
         return (s, (a0, a1))  # (secret, public)
@@ -43,9 +43,20 @@ class KYBER:
         e = [discrete_gaussian(self)
              for _ in range(3)]
 
-        m = Rq(m.poly.coeffs, self.p)
+        m = Rq(m.poly.coeffs, self.q)
+ 
+        u = [] # kx1
+        v = [] # 1x1
 
-        return (m + a0 * e[0] + self.t * e[2], a1 * e[0] + self.t * e[1])
+        for i in range(self.k):
+            for j in range(self.k):
+                u.append(a1[j][i]*e[0][j])
+            u[i] += e[1][i]
+            v.append(a0[i]*e[0][i])
+        v[0] += e[2][0] + m
+
+
+        return (u,v)
 
     def decrypt(self, c, s):
         '''
@@ -53,71 +64,24 @@ class KYBER:
             c: ciphertext (c0, c1, ..., ck)
             s: secret key
         '''
-        c = [ci * s**i for i, ci in enumerate(c)]
+        u,v = c
+        m = []
 
-        m = c[0]
-        for i in range(1, len(c)):
-            m += c[i]
+        for i in range(self.k):
+            m.append(s[i]*u[i])
+        
+        m[0] = v[0] - m[0]
 
-        m = Rq(m.poly.coeffs, self.t)
-
-        return m
-
-    def add(self, c0, c1):
-        '''
-        # Args:
-            c0: ciphertext (c0, c1, ..., ck)
-            c1: ciphertext (c'0, c'1, ..., c'k')
-        '''
-        c = ()
-
-        k0 = len(c0)  # not necessary to compute (len - 1)
-        k1 = len(c1)
-
-        if k0 > k1:
-            (c0, c1) = (c1, c0)  # c0 is always shorter
-
-        for _ in range(abs(k0 - k1)):
-            c0 += (Rq([0], self.p),)  # add 0 to shorter ciphertext
-
-        for i in range(len(c0)):
-            c += (c0[i] + c1[i],)
-
-        return c
-
-    def mul(self, c0, c1):
-        '''
-        # Args:
-            c0: ciphertext (c0, c1, ..., ck)
-            c1: ciphertext (c'0, c'1, ..., c'k')
-        '''
-        c = ()
-
-        k0 = len(c0) - 1
-        k1 = len(c1) - 1
-
-        for _ in range(k1):
-            c0 += (Rq([0], self.p),)
-
-        for _ in range(k0):
-            c1 += (Rq([0], self.p),)
-
-        for i in range(k0 + k1 + 1):
-            _c = Rq([0], self.p)
-            for j in range(i+1):
-                _c += c0[j] * c1[i-j]
-            c += (_c,)
-
-        return c
-
+        return m[0]
 
 def discrete_gaussian(self):
     s = []
-    for i in range(self.k):
-        tuple_coeffs = CALLS.callGAUSSAMPLER()
+    for _ in range(self.k):
+
+        tuple_coeffs = CALLS.callGAUSSAMPLER() #will call the request_queue
         coeffs = []
         for num in tuple_coeffs:
             coeffs.append(num)
-        coeffs = coeffs[1 : ]
-    s.append(Rq(coeffs,self.q))
+        s.append(Rq(coeffs,self.q))
+
     return s
